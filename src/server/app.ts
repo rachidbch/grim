@@ -1,5 +1,5 @@
 import { handleApi, json } from "./api.ts";
-import { authenticate, bearerToken, handleAuthRoute, participantForUser, repoAccess, sameOrigin, userFromAppToken, userFromRequest, visitorUser } from "./auth.ts";
+import { authenticate, bearerToken, handleAuthRoute, mcpAllowed, PAT_PREFIX, participantForUser, repoAccess, sameOrigin, userFromAppToken, userFromPat, userFromRequest, visitorUser } from "./auth.ts";
 import { config } from "./config.ts";
 import { recordJoin } from "./workspaces.ts";
 import { guestFromHeaders, guestFromQuery, guestParticipant } from "./anon.ts";
@@ -171,8 +171,9 @@ export function createApp(deps: AppDeps) {
     }
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: MCP_CORS });
     const token = bearerToken(req);
-    // an MCP client's token (audience "mcp"), or an app's (any)
-    const user = token ? await userFromAppToken(db, token, MCP_AUDIENCE) : null;
+    // an MCP client's token (audience "mcp"), an app's (any), or a PAT; and only accounts MCP_ALLOWED_USER_IDS lets in
+    const found = !token ? null : token.startsWith(PAT_PREFIX) ? await userFromPat(db, token) : await userFromAppToken(db, token, MCP_AUDIENCE);
+    const user = found && mcpAllowed(found.id) ? found : null;
     if (!user) {
       return rpcFail(401, token ? "invalid or expired token: sign in again" : "sign in to Grim: this MCP server uses OAuth (see WWW-Authenticate)", {
         ...MCP_CORS,

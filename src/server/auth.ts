@@ -56,6 +56,8 @@ export function signInProblem(): string | null {
   if (!/^(on|off|true|false|1|0|yes|no)?$/i.test(config.signInSetting)) {
     return `SIGN_IN must be "on" or "off" (it is "${config.signInSetting}"). See ${SIGN_IN_DOCS}`;
   }
+  const pat = patProblem();
+  if (pat) return pat;
   if (!config.signIn || googleLoginEnabled() || githubLoginEnabled() || devLoginEnabled()) return null;
   const missing = [!config.google.clientId && "GOOGLE_CLIENT_ID", !config.google.clientSecret && "GOOGLE_CLIENT_SECRET (or GOOGLE_CLIENT_SECRET_FILE)"].filter(Boolean).join(" and ");
   return (
@@ -65,6 +67,23 @@ export function signInProblem(): string | null {
     `(off: no accounts, everyone can do everything). See ${SIGN_IN_DOCS}`
   );
 }
+
+/** An account id as written in MCP_ALLOWED_USER_IDS (ids are newId's prefix + base64url). */
+export const ACCOUNT_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** Why the PAT settings can't work, or null: PATs need accounts (SIGN_IN=on) and an explicit, valid allowlist. */
+export function patProblem(): string | null {
+  if (!/^(on|off|true|false|1|0|yes|no)?$/i.test(config.patSetting)) return `PAT_ENABLED must be "on" or "off" (it is "${config.patSetting}").`;
+  const bad = [...config.mcpAllowedUserIds].find((id) => !ACCOUNT_ID.test(id));
+  if (bad !== undefined) return `MCP_ALLOWED_USER_IDS holds an invalid account id (${JSON.stringify(bad.slice(0, 80))}).`;
+  if (!config.patEnabled) return null;
+  if (!config.signIn) return "PAT_ENABLED=on needs SIGN_IN=on (tokens belong to accounts).";
+  if (!config.mcpAllowedUserIds.size) return "PAT_ENABLED=on needs MCP_ALLOWED_USER_IDS (the accounts allowed at /mcp).";
+  return null;
+}
+
+/** Whether /mcp (and the workspace URL with a token) accepts this account: MCP_ALLOWED_USER_IDS, when set. */
+export const mcpAllowed = (userId: string) => !config.mcpAllowedUserIds.size || config.mcpAllowedUserIds.has(userId);
 
 // ---- cookies & sessions ----
 
@@ -207,13 +226,14 @@ export const APP_TOKEN_IDLE_MS = 90 * 24 * 3600_000;
  * /mcp); a token made for one audience (an MCP client's) works only there, app tokens (no audience) everywhere.
  */
 export async function userFromAppToken(db: Db, token: string, audience: string | null = null): Promise<User | null> {
-  if (token.length > 200) return null;
+  // a PAT works at /mcp only, through userFromPat: never here (the API, sockets, the workspace URL), never cached
+  if (token.length > 200 || token.startsWith(PAT_PREFIX)) return null;
   const key = `t:${sha256(token)}`;
   const fits = (a: string | null | undefined) => !a || a === audience;
   const hit = cached(key);
   if (hit) return fits(hit.audience) ? hit.user : null;
   const row = await db.get<UserRow & { token_id: string; token_used: number | null; token_audience: string | null }>(
-    "SELECT u.*, t.id AS token_id, t.last_used_at AS token_used, t.audience AS token_audience FROM app_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ? AND t.revoked_at IS NULL AND COALESCE(t.last_used_at, t.created_at) > ?",
+    "SELECT u.*, t.id AS token_id, t.last_used_at AS token_used, t.audience AS token_audience FROM app_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ? AND t.revoked_at IS NULL AND t.kind IS NULL AND COALESCE(t.last_used_at, t.created_at) > ?",
     sha256(token),
     Date.now() - APP_TOKEN_IDLE_MS,
   );
@@ -228,6 +248,29 @@ export async function userFromAppToken(db: Db, token: string, audience: string |
   const user = toUser(row);
   remember(key, user, row.token_id, AUTH_CACHE_MS, row.token_audience);
   return fits(row.token_audience) ? user : null;
+}
+
+/** A personal access token's secret starts with this (app and OAuth tokens: gmt_). */
+export const PAT_PREFIX = "gmp_";
+/** A PAT stops working this long after it was made, used or not (and, like any token, after APP_TOKEN_IDLE_MS idle). */
+export const PAT_TTL_MS = 90 * 24 * 3600_000;
+
+/**
+ * The account of an active PAT at /mcp (PAT_ENABLED), or null. Never cached, so a revoke, an expiry or a deleted
+ * account counts from the next request; the MCP allowlist is the caller's (mcpCaller) to check.
+ */
+export async function userFromPat(db: Db, token: string): Promise<User | null> {
+  if (!config.patEnabled || !token.startsWith(PAT_PREFIX) || token.length > 200) return null;
+  const now = Date.now();
+  const row = await db.get<UserRow & { token_id: string; token_used: number | null }>(
+    "SELECT u.*, t.id AS token_id, t.last_used_at AS token_used FROM app_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ? AND t.kind = 'pat' AND t.audience = 'mcp' AND t.revoked_at IS NULL AND t.expires_at > ? AND COALESCE(t.last_used_at, t.created_at) > ?",
+    sha256(token),
+    now,
+    now - APP_TOKEN_IDLE_MS,
+  );
+  if (!row) return null;
+  if (!row.token_used || now - row.token_used > 60_000) await db.run("UPDATE app_tokens SET last_used_at = ? WHERE id = ?", now, row.token_id);
+  return toUser(row);
 }
 
 async function userFromCookie(db: Db, req: Request): Promise<User | null> {

@@ -89,6 +89,14 @@ export const config = {
   // ADMIN_EMAILS: the accounts (verified emails, comma-separated) that may open /admin/stats. Empty: nobody. With
   // sign-in off there are no accounts: "*" opens it to every visitor.
   adminEmails: new Set(env("ADMIN_EMAILS").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)),
+  // PAT_ENABLED=on|off: personal access tokens for MCP clients that can't do OAuth (made on the server by
+  // scripts/mcp-tokens.ts, good only at /mcp). Off by default. On needs SIGN_IN=on and MCP_ALLOWED_USER_IDS (auth.ts).
+  patEnabled: /^(on|true|1|yes)$/i.test(env("PAT_ENABLED")),
+  /** PAT_ENABLED as written (checked by signInProblem). */
+  patSetting: env("PAT_ENABLED"),
+  // MCP_ALLOWED_USER_IDS: the accounts (internal ids, comma-separated) whose tokens /mcp and the workspace URL accept,
+  // OAuth tokens and PATs alike. Empty: every account's (upstream's behavior).
+  mcpAllowedUserIds: new Set(env("MCP_ALLOWED_USER_IDS").split(",").map((s) => s.trim()).filter(Boolean)),
 };
 
 // Secrets stay readable and writable but are accessors over a closure (not enumerable, shown as [Getter/Setter]):

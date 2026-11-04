@@ -5,7 +5,7 @@
 // Who: without credentials, guest rules (hosted: edit existing notes only; SIGN_IN=off: everything); with
 // `Authorization: Bearer <app token>` (an app's or an MCP client's), what that account may do.
 import { config, guestCreate } from "./config.ts";
-import { bearerToken, participantForAgent, repoAccess, userFromAppToken, type Access } from "./auth.ts";
+import { bearerToken, mcpAllowed, participantForAgent, repoAccess, userFromAppToken, type Access } from "./auth.ts";
 import { getRepo, type RepoRow, type RepoService } from "./repos.ts";
 import type { Db } from "./seams/db.ts";
 import { WORKSPACE, type AccessFn, type ShellCtx } from "./shell/fs.ts";
@@ -74,7 +74,9 @@ export async function agentCaller(db: Db, req: Request): Promise<AgentCaller | R
   const ip = clientIp(req);
   const token = config.signIn ? bearerToken(req) : null;
   if (!token) return { userId: null, ip };
-  const user = await userFromAppToken(db, token, MCP_AUDIENCE);
+  const found = await userFromAppToken(db, token, MCP_AUDIENCE);
+  // (the same accounts as /mcp: MCP_ALLOWED_USER_IDS, when set)
+  const user = found && mcpAllowed(found.id) ? found : null;
   if (!user) return failure(req, new URL(req.url), true)(401, "invalid or expired token: sign in again, or send no Authorization header for guest access");
   return { userId: user.id, ip };
 }

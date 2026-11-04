@@ -147,6 +147,11 @@ db.transaction(() => {
 if (!columns("app_tokens").includes("audience")) db.exec("ALTER TABLE app_tokens ADD COLUMN audience TEXT");
 if (!columns("connect_codes").includes("audience")) db.exec("ALTER TABLE connect_codes ADD COLUMN audience TEXT");
 
+// Personal access tokens for MCP (scripts/mcp-tokens.ts). Same as migrations/0010_mcp_pats.sql.
+if (!columns("app_tokens").includes("kind")) db.exec("ALTER TABLE app_tokens ADD COLUMN kind TEXT");
+if (!columns("app_tokens").includes("expires_at")) db.exec("ALTER TABLE app_tokens ADD COLUMN expires_at INTEGER");
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS app_tokens_pat_name ON app_tokens(user_id, label) WHERE kind = 'pat' AND revoked_at IS NULL");
+
 // The last known head commit of each workspace's branch (null until something records it), also
 // added in place, so the Bun schema matches migrations/0001_init.sql.
 if (!columns("repos").includes("head")) db.exec("ALTER TABLE repos ADD COLUMN head TEXT");
