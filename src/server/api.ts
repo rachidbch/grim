@@ -140,6 +140,8 @@ async function route(req: Request, url: URL, ctx: Ctx, user: User | null, visito
         // false: adding GitHub repos is turned off (GITHUB_COPIES), so clients don't offer it
         githubCopies: config.githubCopiesEnabled,
         demoResetMinutes: config.demoResetMinutes,
+        // false: this server has no demo (DEMO_ENABLED off); absent on older servers: on
+        demoEnabled: config.demoEnabled,
         // WebSocket protocol versions (2: one socket per workspace, docs/07-workspace-socket.md)
         ws: wsProtocols,
       },
@@ -151,8 +153,8 @@ async function route(req: Request, url: URL, ctx: Ctx, user: User | null, visito
   // <img> sends no guest headers, and reading isn't taking a place).
   const person = demoPerson(req, user, visitor);
   if (p === "/api/demo/room" && m === "POST") {
-    // the demo is for hosted servers (sign-in on): a server without sign-in has none
-    if (!config.signIn) return fail(404, "this server has no demo");
+    // the demo is for hosted servers (sign-in on): a server without sign-in has none; DEMO_ENABLED can turn it off
+    if (!config.signIn || !config.demoEnabled) return fail(404, "this server has no demo");
     if (!csrfOk(req)) return fail(403, "cross-origin request refused");
     if (!person) return fail(400, "the demo needs a guest identity (X-Grimoire-Guest)");
     // (a visitor still in their room, a reload, isn't counted again)

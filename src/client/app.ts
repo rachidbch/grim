@@ -42,6 +42,8 @@ let signedIn = false;
  * see me (cursor, presence, commits); "Change name…" renames it.
  */
 let noSignIn = false;
+/** this server has no demo (DEMO_ENABLED off): a guest gets the sign-in page, never a demo room */
+let noDemo = false;
 let guest: AnonIdentity | null = null;
 /** The workspaces I know on this server (my list, and any other I opened), for their details. */
 let repos: Workspace[] = [];
@@ -234,6 +236,7 @@ async function boot() {
       .finally(reveal);
   // the scratch note needs nothing from the server (and no account)
   if (location.pathname === "/scratch") return void (renderScratch(app), reveal());
+  noDemo = server.demoEnabled === false;
   if (server.signIn === false) {
     // no accounts here: everyone may do everything, as this browser's guest identity (no sign-in UI anywhere)
     noSignIn = true;
@@ -1856,6 +1859,7 @@ let demoResetMinutes: number | undefined;
 
 /** /app/demo opens my demo room: the same one again while it's there (the server knows this browser by its guest id). */
 async function resolveDemoRoom(): Promise<string | null> {
+  if (noDemo) return null;
   if (demoRoom) return demoRoom;
   try {
     const room = await api.demoRoom();
@@ -1998,20 +2002,21 @@ async function route() {
   let r = parseRoute();
   // the demo is for people who aren't signed in on a hosted server: an account goes to its own workspace instead (a
   // server without sign-in has no demo)
-  if ((r?.repo === DEMO_ID || isDemoRoom(r?.repo)) && (hasAccount() || noSignIn)) {
+  if ((r?.repo === DEMO_ID || isDemoRoom(r?.repo)) && (hasAccount() || noSignIn || noDemo)) {
     window.history.replaceState(null, "", "/app");
     r = null;
   }
   const last = !r && !skipLast ? readLastNote() : null;
-  let id = r?.repo ?? (last && (repoById(last.repo) || (last.repo === DEMO_ID && !signedIn)) ? last.repo : null) ?? (skipLast && repoById(wsId) ? wsId : null) ?? firstWorkspace();
+  let id = r?.repo ?? (last && (repoById(last.repo) || (last.repo === DEMO_ID && !signedIn && !noDemo)) ? last.repo : null) ?? (skipLast && repoById(wsId) ? wsId : null) ?? firstWorkspace();
   // /app/demo: my demo room (asked for once; again if it went or filled up)
   if (id === DEMO_ID || isDemoRoom(id)) {
     const room = await resolveDemoRoom();
     if (seq !== routeSeq || !room) return;
     id = room;
   }
-  if (!id && !signedIn) {
+  if (!id && !signedIn && !noDemo) {
     // nothing to open for a guest (a hosted server has no shared workspace): the public demo
+    // (a server without one leaves them on /app: the Welcome empty state, whose only way on is signing in)
     window.history.replaceState(null, "", urlFor(DEMO_ID) + location.search + location.hash);
     return route();
   }

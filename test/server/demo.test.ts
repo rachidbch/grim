@@ -15,7 +15,7 @@ process.env.POLL_MS = "60000";
 const { config } = await import("../../src/server/config.ts");
 const { db } = await import("../../src/server/db.ts");
 const restore = isolate(config, db);
-Object.assign(config, { storage: "local", allowDevLogin: true, signIn: true, quietMs: 100, demoResetMinutes: 0 });
+Object.assign(config, { storage: "local", allowDevLogin: true, signIn: true, quietMs: 100, demoResetMinutes: 0, demoEnabled: true });
 config.github.clientId = "";
 config.github.appSlug = "";
 const { startServer } = await import("../../src/server/index.ts");
@@ -173,10 +173,10 @@ describe("demo folder", () => {
 
   test("accounts never have the demo: not joined on open or by join-many, not listed; their own workspace instead", async () => {
     const ids = async (path: string) => ((await api(alice, "GET", path)).data as Array<{ id: string }>).map((w) => w.id);
-    // opening it (its tree) records no join, and join-many skips it
+    // opening it (its tree) records no join, and join-many doesn't join it ("demo" is no workspace: reported missing)
     expect((await api(alice, "GET", "/api/workspace/demo/tree")).status).toBe(404);
     const merged = (await api(alice, "POST", "/api/workspaces/join-many", { ids: ["demo"] })).data;
-    expect(merged).toEqual({ joined: [], missing: [] });
+    expect(merged).toEqual({ joined: [], missing: ["demo"] });
     expect(await ids("/api/workspaces")).not.toContain("demo");
     expect(await ids("/api/workspaces")).not.toContain("demo");
     expect(db.query("SELECT count(*) AS n FROM joined WHERE workspace_id = 'demo'").get()).toEqual({ n: 0 });
@@ -215,17 +215,23 @@ describe("demo folder", () => {
     const up = await fetch(`${base}/api/workspace/${D}/images?note=Welcome.md&name=big.png`, { method: "POST", headers: { origin: base, "content-type": "image/png", ...GUEST }, body: png });
     expect(up.status).toBe(413);
     expect((await up.json()).error).toBe(DEMO_FULL);
-    // images: 10 MB in all
+    // images: 10 MB in all (the seed's images count too, so size these to what's left of it)
     const img = (n: number) => {
       const b = new Uint8Array(n);
       b.set([0x89, 0x50, 0x4e, 0x47]);
       return b;
     };
-    for (let i = 0; i < 5; i++) expect((await put([{ path: `images/i${i}.png`, content: img(2 * 1024 * 1024 - 1000) }])).ok).toBe(true);
+    // (the API's tree carries paths only; sizes come from the store)
+    const sizes = async () => Object.fromEntries((await app.ctx.store.listFilesWithMetadata(D, "main")).map((f) => [f.path, f.size]));
+    const seedImages = Object.entries(await sizes()).filter(([path]) => !path.endsWith(".md")).reduce((a, [, size]) => a + size, 0);
+    const each = Math.floor((10 * 1024 * 1024 - seedImages - 1000) / 5);
+    for (let i = 0; i < 5; i++) expect((await put([{ path: `images/i${i}.png`, content: img(each) }])).ok).toBe(true);
     await expect(put([{ path: "images/i5.png", content: img(200_000) }])).rejects.toBeInstanceOf(StoreFullError);
-    // everything: 20 MB (text included)
-    for (let i = 0; i < 9; i++) await put([{ path: `filler${i}.md`, content: "y".repeat(1024 * 1024) }]);
-    await expect(put([{ path: "filler9.md", content: "y".repeat(1024 * 1024) }])).rejects.toBeInstanceOf(StoreFullError);
+    // everything: 20 MB (text included): 1 MB notes while they fit, the next one refused
+    const used = async () => Object.values(await sizes()).reduce((a, size) => a + size, 0);
+    const n = Math.floor((20 * 1024 * 1024 - (await used())) / (1024 * 1024));
+    for (let i = 0; i < n; i++) expect((await put([{ path: `filler${i}.md`, content: "y".repeat(1024 * 1024) }])).ok).toBe(true);
+    await expect(put([{ path: `filler${n}.md`, content: "y".repeat(1024 * 1024) }])).rejects.toBeInstanceOf(StoreFullError);
     // the server is fine; a room whose commit is refused keeps its text live
     expect((await api("", "GET", `/api/workspace/${D}/tree`)).status).toBe(200);
     // …while someone is in it; with nobody in it, it is let go instead of being retried forever

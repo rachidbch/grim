@@ -3,6 +3,7 @@
 // has been in it for a while. Sockets tell it who is connected where, so they keep their places.
 import { createDemoRoomRow, deleteDemoRoomRow, deleteStaleDemoRows, newDemoStore, seedDemoRepo, startDemoResets } from "../demo.ts";
 import { DEMO_REPORT_MS, DemoLobby, isDemoRoom, localGate, setDemoGate, type LobbyOptions } from "../demo-rooms.ts";
+import { config } from "../config.ts";
 import type { Ctx } from "../ops.ts";
 import { forgetRepo } from "../repo-cache.ts";
 import type { Db } from "../seams/db.ts";
@@ -36,6 +37,8 @@ export class BunDemoRooms {
   async start(ctx: Ctx) {
     this.ctx = ctx;
     await deleteStaleDemoRows(this.db, new Set());
+    // DEMO_ENABLED off: the API never makes a room, so no gate, report timer or resets either
+    if (!config.demoEnabled) return;
     setDemoGate(localGate(this.lobby));
     this.timer = setInterval(() => this.reportAll(), DEMO_REPORT_MS);
     this.stopResets = startDemoResets(ctx, () => [...this.stores.keys()]);
@@ -64,6 +67,8 @@ export class BunDemoRooms {
   }
 
   private async create(id: string) {
+    // DEMO_ENABLED off: no path may seed a room (start() installs no gate; this is the belt)
+    if (!config.demoEnabled) throw new Error("demo disabled");
     const ctx = this.ctx!;
     this.stores.set(id, newDemoStore());
     await createDemoRoomRow(this.db, id);

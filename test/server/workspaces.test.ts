@@ -85,9 +85,9 @@ describe("public folders", () => {
   test("anyone signed in opens and edits any folder; opening it joins it; leaving takes it off the list", async () => {
     const owner = await person("Pub Owner");
     const ws = await workspace(owner, "WST Public", { "p.md": "p\n" });
-    const item = { id: ws, title: "WST Public", kind: "notes", readOnly: false, status: "ready", head: expect.any(String) };
+    const item = { id: ws, title: "WST Public", kind: "notes", readOnly: false, status: "ready", branch: "main", error: null, ghOwner: null, ghName: null, guestCreate: false };
     expect((await api(owner.cookie, "GET", "/api/workspaces")).data.find((w: any) => w.id === ws)).toEqual({ ...item, canRemove: true });
-    expect((await api(owner.cookie, "GET", `/api/workspace/${ws}`)).data).toEqual({ ...item, canRemove: true, ownerId: owner.id });
+    expect((await api(owner.cookie, "GET", `/api/workspace/${ws}`)).data).toEqual({ ...item, canRemove: true });
 
     for (const p of [await person("Pub Other"), await person("moist-noodle")]) {
       expect((await api(p.cookie, "GET", "/api/workspaces")).data.some((w: any) => w.id === ws)).toBe(false);
@@ -108,8 +108,8 @@ describe("public folders", () => {
     expect((await api(owner.cookie, "DELETE", `/api/workspace/${ws}/join`)).status).toBe(200);
     expect((await api(owner.cookie, "GET", "/api/workspaces")).data.some((w: any) => w.id === ws)).toBe(false);
     expect((await api(owner.cookie, "GET", `/api/workspace/no-such-ws`)).status).toBe(404);
-    // Signed out: reading is open (no joined list, no folder details), writing isn't.
-    expect((await fetch(`${base}/api/workspace/${ws}`)).status).toBe(401);
+    // Signed out: reading is open (folder details too), writing isn't.
+    expect((await fetch(`${base}/api/workspace/${ws}`)).status).toBe(200);
     expect((await fetch(`${base}/api/workspaces`)).status).toBe(401);
     expect(((await (await fetch(`${base}/api/workspace/${ws}/tree`)).json()) as { files: string[] }).files).toContain("p.md");
     expect((await fetch(`${base}/api/workspace/${ws}/files`, { method: "POST", headers: { origin: base, "content-type": "application/json" }, body: JSON.stringify({ path: "x.md" }) })).status).toBe(401);
@@ -139,7 +139,8 @@ describe("public folders", () => {
   test("the access settings are gone", async () => {
     const owner = await person("Gone Owner");
     const ws = await workspace(owner, "WST Gone");
-    expect((await api(owner.cookie, "PATCH", `/api/workspace/${ws}`, { linkAccess: "none" })).status).toBe(405);
+    // (no PATCH route on /api/workspace/:id: the access settings are simply gone, so the router's 404)
+    expect((await api(owner.cookie, "PATCH", `/api/workspace/${ws}`, { linkAccess: "none" })).status).toBe(404);
     expect((await api(owner.cookie, "GET", `/api/workspace/${ws}/members`)).status).toBe(404);
     expect((await api(owner.cookie, "POST", `/api/workspace/${ws}/members`, { email: "x@example.com" })).status).toBe(404);
     expect((await fetch(`${base}/api/workspace/${ws}/public`)).status).toBe(401);

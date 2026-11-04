@@ -14,6 +14,8 @@ export interface ServerInfo {
   githubCopies?: boolean;
   /** How often the demo workspace resets (0: only on restart). */
   demoResetMinutes: number;
+  /** false: this server has no demo (DEMO_ENABLED off) - no rooms, no banner, guests go to sign-in; absent: on. */
+  demoEnabled?: boolean;
   /** WebSocket protocol versions served (v2 = one socket per workspace); absent: v1 only. */
   ws?: number[];
 }

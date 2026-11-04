@@ -72,6 +72,9 @@ export const config = {
   // The demo folder (demo.ts) goes back to its seed this often, in minutes (0: never, except on restart).
   // DEMO_RESET_MINUTES wins; the older DEMO_RESET_HOURS still works when it isn't set. Default 15 minutes.
   demoResetMinutes: env("DEMO_RESET_MINUTES") ? Number(env("DEMO_RESET_MINUTES")) : env("DEMO_RESET_HOURS") ? Number(env("DEMO_RESET_HOURS")) * 60 : 15,
+  // DEMO_ENABLED=on|off: the demo for signed-out visitors (rooms, banner, resets). off: none at all - the API
+  // refuses a room, nothing is seeded or reset, clients take guests straight to the sign-in page. On by default.
+  demoEnabled: !/^(off|false|0|no)$/i.test(env("DEMO_ENABLED")),
   // GITHUB_COPIES=on|off: adding GitHub repos as workspaces (POST /api/workspaces {github}) and refreshing the
   // read-only copies from GitHub. off, the default: the API refuses (403), clients hide the option (GET /api/server
   // githubCopies), and copies added before stay readable as ordinary read-only workspaces that no longer refresh.
