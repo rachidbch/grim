@@ -53,6 +53,14 @@ and commit authors still tell people apart. A new server starts empty ("Start a 
   labelled "<client> (MCP)", hashed, 90 days idle, **bound to `/mcp`** (the API and sockets refuse it). Signing out
   or switching accounts in the web app doesn't touch MCP tokens; to disconnect a client, revoke its token
   (`DELETE /api/tokens/:id`, or `revoked_at` in `app_tokens`; there's no screen yet).
+- **Personal access tokens** (`gmp_…`, `PAT_ENABLED=on`) are made on the server by `scripts/mcp-tokens.ts`, never over
+  HTTP: `app_tokens` rows with `kind` 'pat', audience `mcp`, an absolute `expires_at` 90 days after creation (and the
+  usual 90 idle days), one active name per account (a revoked row stays; its name may be used again). Only `/mcp`
+  accepts one, through its own lookup that is never cached, so a revoke, an expiry or a deleted account counts from
+  the next request (an already running command finishes). The usual token lookup refuses `gmp_` and `kind` 'pat'.
+  On Workers with D1 read replication a revoke counts once it has replicated.
+- **`MCP_ALLOWED_USER_IDS`**, when set, is checked for every token at `/mcp` and the workspace URLs, OAuth tokens and
+  PATs alike: other accounts still sign in to the web app, but their agents get a 401.
 
 ## Workspaces and accounts
 

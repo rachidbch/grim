@@ -97,6 +97,8 @@ Settings are environment variables, read from `.env` in the directory you start 
 | `REPO_CACHE` | off | `1` keeps workspace records in memory for up to 10 seconds. Made for the Cloudflare build, like `AUTH_CACHE`. |
 | `METRICS` | on | Counts of a few events (signups, sign-ins, workspaces and notes created, agent commands, …) in the server's own database, per day, with no personal data; never sent anywhere. `off` records nothing. See [Metrics](README.md#metrics). |
 | `ADMIN_EMAILS` | | Who may open the metrics dashboard at `/admin/stats`: comma-separated verified account emails (with `SIGN_IN=on`). Everyone else gets a 404. With sign-in off there are no accounts: `*` opens it to every visitor. Empty: nobody. |
+| `MCP_ALLOWED_USER_IDS` | | The accounts (internal ids, comma-separated) whose tokens `/mcp` and the workspace URLs accept: OAuth tokens and personal access tokens alike. Empty: every account's. Guests (no token) are unaffected. |
+| `PAT_ENABLED` | off | `on`: personal access tokens for MCP clients that can't do OAuth (see [MCP](#mcp)). Needs `SIGN_IN=on` and `MCP_ALLOWED_USER_IDS`; the server refuses to start otherwise. |
 
 The secrets (`CODE_STORAGE_PRIVATE_KEY`, `GITHUB_CLIENT_SECRET`, `GOOGLE_CLIENT_SECRET`) can each come from a file: set `<NAME>_FILE` to its path and leave `<NAME>` empty. In the variable itself, `\n` stands for a line break.
 
@@ -311,6 +313,7 @@ Limits: 120 calls a minute and 4 commands at a time per IP address and workspace
 
 - **Sign-in off:** no authorization at all; every workspace on the server is reachable (one more reason to keep it private). Browsers may only call it from the server's own origin.
 - **`SIGN_IN=on`:** the client signs you in with OAuth by itself (a browser opens for Google, then "Allow <client> to access your Grim workspaces?"). Its token works only at `/mcp`.
+- **Personal access tokens** (`PAT_ENABLED=on`), for a client that can't do OAuth but can send a header. On the server, as its account and with its environment: `bun scripts/mcp-tokens.ts create --user-id <id> --name <device> --out <file>` writes the token once to a new 0600 file (never to the terminal); the client sends it as `Authorization: Bearer <token>`. `list --user-id <id>` shows an account's tokens (OAuth ones too) without secrets; `revoke --user-id <id> --id <token-id>` ends one from the next request. A PAT works only at `/mcp`, for 90 days from creation (or until unused for 90 days). An account's id is `id` in `GET /api/me`.
 
 The full agent and MCP interfaces are in the [technical docs](README.md#agents) ([MCP](README.md#mcp)).
 
