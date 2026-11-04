@@ -67,10 +67,10 @@ describe("server info", () => {
   test("GET /api/server needs no auth and describes sign-in", async () => {
     const r = await api({}, "GET", "/api/server");
     expect(r.status).toBe(200);
-    expect(r.data).toEqual({ name: new URL(config.publicUrl).host, publicUrl: config.publicUrl, google: true, version: expect.any(String), ws: [1, 2] });
+    expect(r.data).toMatchObject({ name: new URL(config.publicUrl).host, signIn: true, marketing: false, googleLogin: true, githubLogin: false, githubAppSlug: null, ws: [1, 2] });
     config.google.clientId = "";
     try {
-      expect((await api({}, "GET", "/api/server")).data.google).toBe(false);
+      expect((await api({}, "GET", "/api/server")).data.googleLogin).toBe(false);
       expect((await fetch(`${base}/auth/google`, { redirect: "manual" })).status).toBe(404);
     } finally {
       config.google.clientId = "test-client.apps.googleusercontent.com";

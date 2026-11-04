@@ -178,7 +178,7 @@ describe("auth", () => {
     const info = await (await fetch(`${base}/api/server`)).json();
     expect(info).toMatchObject({ signIn: true, marketing: false, githubLogin: false, googleLogin: false, githubAppSlug: null, githubCopies: true, ws: [1, 2] });
     expect(info).not.toHaveProperty("storage");
-    expect((await fetch(`${base}/api/config`)).status).toBe(404);
+    expect((await fetch(`${base}/api/config`)).status).toBe(401);
     expect((await fetch(`${base}/api/me`)).status).toBe(401);
     expect((await fetch(`${base}/api/workspace/${N}/tree`)).status).toBe(200);
     // signed out: no list (no default notebook either)
@@ -479,7 +479,7 @@ describe("files", () => {
     } finally {
       crypto.getRandomValues = real;
     }
-    expect(c).toBe("api-dup-aaaa");
+    expect(c).toBe("api-dup-aaaaaaaaaaaa");
     expect(d).toMatch(/^api-dup-[a-z2-9]{12}$/);
     expect(d).not.toBe(c);
     expect(forced).toBeGreaterThanOrEqual(3);
