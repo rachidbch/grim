@@ -222,7 +222,7 @@ describe("demo folder", () => {
       return b;
     };
     // (the API's tree carries paths only; sizes come from the store)
-    const sizes = async () => Object.fromEntries((await app.ctx.store.listFilesWithMetadata(D, "main")).map((f) => [f.path, f.size]));
+    const sizes = async () => Object.fromEntries((await app.ctx.store.listFilesWithMetadata!(D, "main")).map((f) => [f.path, f.size]));
     const seedImages = Object.entries(await sizes()).filter(([path]) => !path.endsWith(".md")).reduce((a, [, size]) => a + size, 0);
     const each = Math.floor((10 * 1024 * 1024 - seedImages - 1000) / 5);
     for (let i = 0; i < 5; i++) expect((await put([{ path: `images/i${i}.png`, content: img(each) }])).ok).toBe(true);
