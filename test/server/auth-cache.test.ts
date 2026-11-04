@@ -2,7 +2,7 @@
 // logout and revoke evict, and the cache is off unless config.authCache is set (Workers sets it; Bun leaves it off).
 import { Database } from "bun:sqlite";
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { TtlCache } from "../../src/server/ttl-cache.ts";
 
@@ -13,14 +13,20 @@ const { sha256 } = await import("../../src/server/ids.ts");
 const { bunDb } = await import("../../src/server/bun/db-bun.ts");
 
 const defaultOn = config.authCache;
+// accounts exist only with sign-in on (off, the default, authenticates nobody: auth.ts)
+const signInWas = config.signIn;
+config.signIn = true;
 afterAll(() => {
+  config.signIn = signInWas;
   config.authCache = defaultOn;
   resetAuthCache();
 });
 
 // A fresh database with the shared schema, behind a Db that counts its queries.
 const sqlite = new Database(":memory:");
-sqlite.exec(readFileSync(join(import.meta.dir, "../../migrations/0001_init.sql"), "utf8"));
+// the whole D1 migration chain, in order (tokens need today's columns, e.g. app_tokens.audience)
+const MIGRATIONS = join(import.meta.dir, "../../migrations");
+for (const f of readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort()) sqlite.exec(readFileSync(join(MIGRATIONS, f), "utf8"));
 const inner = bunDb(sqlite);
 let queries: string[] = [];
 const db = {

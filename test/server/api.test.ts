@@ -148,6 +148,8 @@ beforeAll(async () => {
   app = await startServer({ port: 0, quiet: true });
   await seedNotebook(app.ctx, "api-notes");
   base = `http://localhost:${app.server.port}`;
+  // The server on port 0 doesn't learn its own address: point the public URL (OAuth metadata, same-origin) at it.
+  config.publicUrl = base;
   alice = await login("Alice");
   bob = await login("Bob");
 });

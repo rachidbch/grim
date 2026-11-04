@@ -82,7 +82,11 @@ describe("schema", () => {
 
   test("the D1 migrations build the same global tables as db.ts", () => {
     const want = schema(db);
-    expect(Object.keys(want).sort()).toEqual(["app_tokens", "connect_codes", "joined", "repos", "sessions", "users"]);
+    expect(Object.keys(want).sort()).toEqual([
+      "app_tokens", "connect_codes", "joined",
+      "metrics_country", "metrics_daily", "metrics_hourly", "metrics_recent", "metrics_referrer",
+      "repos", "sessions", "users",
+    ]);
     expect(schema(migrated())).toEqual(want);
   });
 
